@@ -1,0 +1,9 @@
+{
+  "id": "ja-local-kb",
+  "name": "JA Local Knowledge",
+  "version": "0.1.0",
+  "minAppVersion": "1.6.0",
+  "description": "Control and inspect the per-device JA local knowledge index.",
+  "author": "Jeffery Asia",
+  "isDesktopOnly": true
+}

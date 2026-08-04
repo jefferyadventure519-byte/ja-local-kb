@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jefferyasia.local/schemas/source-registry-v1.json",
+  "title": "JA Local KB Source Registry",
+  "type": "object",
+  "required": ["schema_version", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "project_id",
+          "project_name",
+          "document_role",
+          "relative_path",
+          "enabled"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "project_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "client_id": {
+            "type": "string",
+            "default": ""
+          },
+          "document_role": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relative_path": {
+            "type": "string",
+            "pattern": "^(?![A-Za-z]:)(?![/\\\\])(?!.*(^|[/\\\\])\\.\\.([/\\\\]|$)).+\\.md$"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
+

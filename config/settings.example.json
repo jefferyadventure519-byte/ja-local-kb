@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "vault_root": "REPLACE_WITH_THIS_DEVICE_VAULT",
+  "runtime_root": "REPLACE_WITH_RUNTIME_ROOT",
+  "source_registry": "REPLACE_WITH_CONFIG_DIR/sources.json",
+  "state_path": "REPLACE_WITH_STATE_DIR/state.sqlite3",
+  "lancedb_root": "REPLACE_WITH_DATA_DIR/lancedb",
+  "embedding": {
+    "provider": "openai_compatible",
+    "model": "Qwen/Qwen3-Embedding-8B",
+    "base_url": "https://api.siliconflow.cn/v1",
+    "secret_name": "embedding_api_key",
+    "dimensions": 4096,
+    "batch_size": 64,
+    "timeout_seconds": 30,
+    "max_retries": 3
+  },
+  "reranker": {
+    "provider": "siliconflow",
+    "model": "Qwen/Qwen3-Reranker-8B",
+    "base_url": "https://api.siliconflow.cn/v1",
+    "secret_name": "embedding_api_key",
+    "instruction": "Rank each passage by whether it provides specific, current, directly citable evidence needed to answer the query. Prefer concrete decisions, rules, constraints, exceptions, state changes, and source facts over generic topical similarity. Treat a multi-part query as independent evidence needs: rank a passage highly when it directly supports any one named project, sub-question, boundary, or exception, even if it does not answer the whole query. Preserve complementary evidence.",
+    "timeout_seconds": 120,
+    "max_retries": 3
+  },
+  "chunking": {
+    "max_chars": 2200,
+    "overlap_chars": 120
+  },
+  "retrieval": {
+    "default_mode": "recall",
+    "simple_top_k": 8,
+    "complex_candidate_k": 24,
+    "complex_top_k": 24,
+    "smart_candidate_k": 80,
+    "smart_max_subqueries": 6,
+    "smart_vector_subqueries": 6,
+    "recall_candidate_k": 80,
+    "quality_candidate_k": 80,
+    "quality_top_k": 40,
+    "evidence_min": 6,
+    "evidence_max": 40
+  }
+}

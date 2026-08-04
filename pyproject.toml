@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ja-local-kb"
+version = "0.1.0"
+description = "Per-device Obsidian knowledge retrieval core with API embeddings, LanceDB, and local MCP."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Jeffery Asia" }]
+dependencies = [
+  "httpx>=0.28,<0.29",
+  "lancedb>=0.34,<0.35",
+  "numpy>=1.26,<3",
+  "portalocker>=3,<4",
+  "pydantic>=2.13,<3",
+  "python-frontmatter>=1.1,<2",
+]
+
+[project.optional-dependencies]
+watch = ["watchdog>=6,<7"]
+mcp = ["mcp>=1,<3"]
+secrets = ["keyring>=25,<26"]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.12,<0.15",
+]
+all = [
+  "watchdog>=6,<7",
+  "mcp>=1,<3",
+  "keyring>=25,<26",
+]
+
+[project.urls]
+Repository = "https://github.com/jefferyadventure519-byte/ja-local-kb"
+Releases = "https://github.com/jefferyadventure519-byte/ja-local-kb/releases"
+
+[project.scripts]
+ja-kb = "ja_local_kb.cli:main"
+ja-kb-mcp = "ja_local_kb.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ja_local_kb"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
