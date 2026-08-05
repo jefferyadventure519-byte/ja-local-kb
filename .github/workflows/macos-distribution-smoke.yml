@@ -42,10 +42,6 @@ jobs:
             architecture: arm64
           - runner: macos-15-intel
             architecture: x86_64
-    env:
-      VAULT_ROOT: ${{ runner.temp }}/JA Local KB Acceptance/Test Vault
-      INSTALL_ROOT: ${{ runner.temp }}/JA Local KB Acceptance/Runtime
-
     steps:
       - name: Check out exact revision
         uses: actions/checkout@v5
@@ -70,6 +66,15 @@ jobs:
           set -euo pipefail
           uv sync --all-extras --no-editable
           uv run --no-sync pytest -q -p no:cacheprovider
+
+      - name: Configure isolated paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "VAULT_ROOT=$RUNNER_TEMP/JA Local KB Acceptance/Test Vault"
+            echo "INSTALL_ROOT=$RUNNER_TEMP/JA Local KB Acceptance/Runtime"
+          } >> "$GITHUB_ENV"
 
       - name: Create isolated Obsidian Vault
         shell: bash
