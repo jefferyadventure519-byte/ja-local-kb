@@ -1,0 +1,182 @@
+name: macOS distribution smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/macos-distribution-smoke.yml"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "obsidian-plugin/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/macos-distribution-smoke.yml"
+      - "scripts/**"
+      - "src/**"
+      - "tests/**"
+      - "obsidian-plugin/**"
+      - "pyproject.toml"
+      - "uv.lock"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-distribution-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  distribution-smoke:
+    name: ${{ matrix.runner }} distribution
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    env:
+      VAULT_ROOT: ${{ runner.temp }}/JA Local KB Acceptance/Test Vault
+      INSTALL_ROOT: ${{ runner.temp }}/JA Local KB Acceptance/Runtime
+
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@v5
+
+      - name: Install uv and Python 3.11
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Confirm runner architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(uname -m)"
+          test "$actual" = "${{ matrix.architecture }}"
+          sw_vers
+
+      - name: Run full regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --all-extras --no-editable
+          uv run --no-sync pytest -q -p no:cacheprovider
+
+      - name: Create isolated Obsidian Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$VAULT_ROOT/.obsidian"
+          test ! -e "$INSTALL_ROOT"
+
+      - name: Preflight exact install targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/preflight-macos.sh "$VAULT_ROOT" "$INSTALL_ROOT"
+
+      - name: Install current revision with production model settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/install-macos.sh \
+            --vault "$VAULT_ROOT" \
+            --install-root "$INSTALL_ROOT" \
+            --version "0.1.0" \
+            --embedding-provider "openai_compatible" \
+            --embedding-base-url "https://api.siliconflow.cn/v1" \
+            --embedding-model "Qwen/Qwen3-Embedding-8B" \
+            --embedding-dimensions "4096" \
+            --reranker-model "Qwen/Qwen3-Reranker-8B" \
+            --reranker-base-url "https://api.siliconflow.cn/v1" \
+            --source-root "$GITHUB_WORKSPACE" \
+            --confirm
+
+      - name: Verify installed files and non-secret configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python="$INSTALL_ROOT/runtime/venv/bin/python"
+          settings="$INSTALL_ROOT/config/settings.json"
+          plugin="$VAULT_ROOT/.obsidian/plugins/ja-local-kb"
+          test -x "$python"
+          test -f "$settings"
+          test -f "$INSTALL_ROOT/config/sources.json"
+          test -f "$plugin/main.js"
+          test -f "$plugin/manifest.json"
+          test -f "$plugin/styles.css"
+          test -f "$plugin/j-icon-white.png"
+          "$python" - "$INSTALL_ROOT" "$VAULT_ROOT" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          install = Path(sys.argv[1])
+          vault = Path(sys.argv[2])
+          settings = json.loads((install / "config/settings.json").read_text())
+          current = json.loads((install / "app/current.json").read_text())
+          plugin = json.loads(
+              (
+                  vault
+                  / ".obsidian/plugins/ja-local-kb/data.json"
+              ).read_text()
+          )
+          assert settings["vault_root"] == str(vault)
+          assert settings["embedding"]["provider"] == "openai_compatible"
+          assert settings["embedding"]["model"] == "Qwen/Qwen3-Embedding-8B"
+          assert settings["embedding"]["dimensions"] == 4096
+          assert settings["reranker"]["model"] == "Qwen/Qwen3-Reranker-8B"
+          assert "api_key" not in settings["embedding"]
+          assert "api_key" not in settings["reranker"]
+          assert current["version"] == "0.1.0"
+          assert plugin["pythonExecutable"] == str(
+              install / "runtime/venv/bin/python"
+          )
+          assert plugin["settingsPath"] == str(
+              install / "config/settings.json"
+          )
+          PY
+
+      - name: Verify installed STDIO MCP
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$INSTALL_ROOT/runtime/venv/bin/python" \
+            scripts/verify-mcp-install.py \
+            --settings "$INSTALL_ROOT/config/settings.json"
+
+      - name: Verify repeat install preserves user state
+        shell: bash
+        run: |
+          set -euo pipefail
+          before_settings="$(shasum -a 256 "$INSTALL_ROOT/config/settings.json")"
+          before_sources="$(shasum -a 256 "$INSTALL_ROOT/config/sources.json")"
+          before_plugin="$(shasum -a 256 "$VAULT_ROOT/.obsidian/plugins/ja-local-kb/data.json")"
+
+          bash scripts/install-macos.sh \
+            --vault "$VAULT_ROOT" \
+            --install-root "$INSTALL_ROOT" \
+            --version "0.1.0" \
+            --embedding-provider "openai_compatible" \
+            --embedding-base-url "https://api.siliconflow.cn/v1" \
+            --embedding-model "Qwen/Qwen3-Embedding-8B" \
+            --embedding-dimensions "4096" \
+            --reranker-model "Qwen/Qwen3-Reranker-8B" \
+            --reranker-base-url "https://api.siliconflow.cn/v1" \
+            --source-root "$GITHUB_WORKSPACE" \
+            --confirm
+
+          test "$before_settings" = "$(shasum -a 256 "$INSTALL_ROOT/config/settings.json")"
+          test "$before_sources" = "$(shasum -a 256 "$INSTALL_ROOT/config/sources.json")"
+          test "$before_plugin" = "$(shasum -a 256 "$VAULT_ROOT/.obsidian/plugins/ja-local-kb/data.json")"
+          find "$INSTALL_ROOT/backups" -maxdepth 1 -type d \
+            -name 'obsidian-plugin_*' | grep -q .
