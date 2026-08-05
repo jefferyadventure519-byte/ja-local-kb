@@ -31,17 +31,9 @@ concurrency:
 
 jobs:
   distribution-smoke:
-    name: ${{ matrix.runner }} distribution
-    runs-on: ${{ matrix.runner }}
+    name: Apple Silicon distribution
+    runs-on: macos-15
     timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-15
-            architecture: arm64
-          - runner: macos-15-intel
-            architecture: x86_64
     steps:
       - name: Check out exact revision
         uses: actions/checkout@v5
@@ -57,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           actual="$(uname -m)"
-          test "$actual" = "${{ matrix.architecture }}"
+          test "$actual" = "arm64"
           sw_vers
 
       - name: Run full regression suite

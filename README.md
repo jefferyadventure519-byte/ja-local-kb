@@ -6,8 +6,10 @@
 
 `0.1.0` 冻结了已经完成 Windows 实机验收的 dev.12：高召回、自动增量、
 Obsidian 控制面、相邻版本回滚与设备来源保护均已进入首个公开稳定 Release。
-支持范围必须分开理解：Windows 已验收；macOS 脚本已提供但仍等待真实 Mac
-端到端验收；Claude 真实客户端也尚未验收。
+支持范围必须分开理解：Windows 已验收；macOS 首版只支持 Apple Silicon
+（M 系列芯片），自动化门禁与真实 Mac 端到端验收仍待完成；Intel Mac
+不受支持；Claude 真实客户端也尚未验收。Intel 边界来自 LanceDB 当前 macOS
+发行包只提供 arm64 轮子：<https://pypi.org/project/lancedb/#files>。
 
 - 已实现显式来源注册、结构化 Chunk、差异 Embedding、SQLite 状态、
   LanceDB 全文/向量/混合检索和失效拒答。
@@ -23,8 +25,9 @@ Obsidian 控制面、相邻版本回滚与设备来源保护均已进入首个�
   备份并合并 MCP 配置，再以真实工具发现和状态/检索/证据回读验证连接。
 - “检索诊断”只展示本次候选证据，不宣称找全；“召回质量报告”只对冻结
   题目和人工标注证据给出正式结论，并在语料、索引、模型或配置变化后标旧。
-- 已提供 Windows/macOS 的预检、安装、诊断、更新和回滚脚本；版本快照不保存
-  `sources.json`，旧快照恢复也不能覆盖设备当前来源。
+- 已提供 Windows 与 Apple Silicon macOS 的预检、安装、诊断、更新和回滚脚本；
+  macOS 预检会在写入前拒绝 Intel 架构。版本快照不保存 `sources.json`，旧快照
+  恢复也不能覆盖设备当前来源。
 - 已使用 42 份冻结基准来源、783 个 Chunk 和 12 道冻结交叉项目题完成 4B/8B
   同条件 API 验收。
 - 历史冻结基准的主链路为 `Qwen/Qwen3-Embedding-8B + recall Top80`：证据覆盖
@@ -36,7 +39,7 @@ Obsidian 控制面、相邻版本回滚与设备来源保护均已进入首个�
 - 8B Reranker Top40 为 `42/47（89.36%）`，说明紧凑压缩会丢证据；
   仅在上下文预算不足时按需启用。
 - 真实 Obsidian、Codex MCP、来源保护与 Windows 相邻版本回滚已经通过；
-  macOS 与 Claude 客户端仍需分别完成真实端到端验证。
+  Apple Silicon macOS 与 Claude 客户端仍需分别完成真实端到端验证。
 
 ## 产品边界
 

@@ -10,6 +10,13 @@ if [[ -z "$vault_root" ]]; then
 fi
 
 ok=true
+architecture="$(uname -m)"
+architecture_supported=false
+if [[ "$architecture" == "arm64" ]]; then
+  architecture_supported=true
+else
+  ok=false
+fi
 [[ -d "$vault_root" ]] || ok=false
 command -v uv >/dev/null 2>&1 || ok=false
 command -v git >/dev/null 2>&1 || ok=false
@@ -24,7 +31,8 @@ fi
 
 printf 'ok=%s\n' "$ok"
 printf 'platform=macos\n'
-printf 'architecture=%s\n' "$(uname -m)"
+printf 'architecture=%s\n' "$architecture"
+printf 'architecture_supported=%s\n' "$architecture_supported"
 printf 'macos_version=%s\n' "$(sw_vers -productVersion)"
 printf 'install_root=%s\n' "$install_root"
 printf 'vault_root=%s\n' "$vault_root"
