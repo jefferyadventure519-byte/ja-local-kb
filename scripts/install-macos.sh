@@ -3,7 +3,7 @@ set -euo pipefail
 
 vault_root=""
 install_root="$HOME/Library/Application Support/JA Local KB"
-version="0.1.0"
+version="0.1.1"
 embedding_model="text-embedding-3-large"
 embedding_provider="openai"
 embedding_base_url="https://api.openai.com/v1"

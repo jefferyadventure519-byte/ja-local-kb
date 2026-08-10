@@ -4,16 +4,21 @@
 
 ## 当前状态
 
-`0.1.0` 冻结了已经完成 Windows 实机验收的 dev.12：高召回、自动增量、
-Obsidian 控制面、相邻版本回滚与设备来源保护均已进入首个公开稳定 Release。
-支持范围必须分开理解：Windows 已验收；macOS 首版只支持 Apple Silicon
-（M 系列芯片），自动化门禁与真实 Mac 端到端验收仍待完成；Intel Mac
+`0.1.1` 在首个稳定版基础上增加客户知识原生登记与统一过滤，并将
+Apple Silicon 安装、插件、STDIO MCP 和重复安装纳入自动化分发门禁。
+支持范围必须分开理解：Windows 已验收；macOS 只支持 Apple Silicon
+（M 系列芯片），自动化门禁已通过但真实 Mac 端到端验收仍待完成；Intel Mac
 不受支持；Claude 真实客户端也尚未验收。Intel 边界来自 LanceDB 当前 macOS
 发行包只提供 arm64 轮子：<https://pypi.org/project/lancedb/#files>。
+其中 `0.1.1` 客户扩展已通过 Windows 隔离升级、回滚和全量回归，正式日常设备
+仍需在 Release 发布后分别完成原地更新验收。
 
 - 已实现显式来源注册、结构化 Chunk、差异 Embedding、SQLite 状态、
   LanceDB 全文/向量/混合检索和失效拒答。
 - 已实现且只公开三个本地 STDIO MCP 工具。
+- 已在同一来源注册表和三个 MCP 工具内原生兼容客户知识：六种检索模式
+  统一支持 `client_ids`，与 `project_ids` 同时提供时使用 AND；Obsidian
+  默认识别客户 00—06 并排除归档。
 - `recall` 是默认 Agent 模式：8B Embedding 生成最多 80 条可追溯证据，
   直接交给 Claude/Codex 二次筛选、分析和回答，不调用 Reranker。
 - `quality` 保留为可选紧凑模式：独立 API Reranker 将同一候选池压缩到

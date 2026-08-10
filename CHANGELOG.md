@@ -2,12 +2,26 @@
 
 ## Unreleased
 
+## 0.1.1 - 2026-08-10
+
+### Features
+
 - Added backward-compatible customer source enrollment and optional
   `client_ids` filtering to the existing three-tool MCP surface without
   changing Embedding, Reranker, chunking, or existing project source IDs.
 - Added repeatable CLI `--client-id`, `source add-client`, Obsidian customer
   Frontmatter recognition, 00-06 admission, archive exclusion, and explicit
   `客户｜客户简称` source grouping.
+- Added Apple Silicon distribution smoke coverage for installation, plugin
+  payload, STDIO MCP discovery, repeated installation, and user-state
+  preservation; Intel Mac remains unsupported.
+
+### Compatibility
+
+- Kept SourceRegistry schema version 1, preserved existing project source IDs,
+  and required no migration or re-embedding for unchanged sources.
+- Kept the public Agent surface at exactly three MCP tools and protected the
+  device-owned source registry during update and rollback.
 
 ## 0.1.0 - 2026-08-04
 
