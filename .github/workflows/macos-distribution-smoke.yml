@@ -88,7 +88,7 @@ jobs:
           bash scripts/install-macos.sh \
             --vault "$VAULT_ROOT" \
             --install-root "$INSTALL_ROOT" \
-            --version "0.1.0" \
+            --version "0.1.1" \
             --embedding-provider "openai_compatible" \
             --embedding-base-url "https://api.siliconflow.cn/v1" \
             --embedding-model "Qwen/Qwen3-Embedding-8B" \
@@ -134,7 +134,7 @@ jobs:
           assert settings["reranker"]["model"] == "Qwen/Qwen3-Reranker-8B"
           assert "api_key" not in settings["embedding"]
           assert "api_key" not in settings["reranker"]
-          assert current["version"] == "0.1.0"
+          assert current["version"] == "0.1.1"
           assert plugin["pythonExecutable"] == str(
               install / "runtime/venv/bin/python"
           )
@@ -162,7 +162,7 @@ jobs:
           bash scripts/install-macos.sh \
             --vault "$VAULT_ROOT" \
             --install-root "$INSTALL_ROOT" \
-            --version "0.1.0" \
+            --version "0.1.1" \
             --embedding-provider "openai_compatible" \
             --embedding-base-url "https://api.siliconflow.cn/v1" \
             --embedding-model "Qwen/Qwen3-Embedding-8B" \
