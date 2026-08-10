@@ -53,6 +53,23 @@ def test_obsidian_control_plane_keeps_retrieval_proof_boundaries_visible() -> No
     assert '["search", query, "--mode", "recall"]' in source
 
 
+def test_obsidian_recognizes_only_active_client_core_documents() -> None:
+    project_root = Path(__file__).resolve().parents[1]
+    source = (
+        project_root / "obsidian-plugin" / "src" / "main.ts"
+    ).read_text(encoding="utf-8")
+
+    assert "frontmatter.client_id" in source
+    assert "frontmatter.client_short_name" in source
+    assert "frontmatter.client" in source
+    assert "frontmatter.doc_type" in source
+    assert '"client_archive", "80_archive"' in source
+    assert '"client_overview"' in source
+    assert '"client_source_index"' in source
+    assert '"add-client"' in source
+    assert "`客户｜${source.project_name || source.client_id}`" in source
+
+
 def test_obsidian_refresh_and_modal_layout_preserve_user_context() -> None:
     project_root = Path(__file__).resolve().parents[1]
     source = (

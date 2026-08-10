@@ -3,6 +3,9 @@
 Desktop-only control surface for the local knowledge runtime.
 
 - Shows every explicitly registered source and its freshness state.
+- Recognizes customer 00-06 notes from `client_id`,
+  `client_short_name`/`client`, and `doc_type`; customer archive folders remain
+  excluded by default and customer groups are labeled `客户｜客户简称`.
 - Adds, updates, disables, or removes the active Markdown file from tracking.
 - Registers selected Markdown immediately, closes the modal, and completes
   chunking and embedding through a serialized background queue.

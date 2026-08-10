@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,8 +8,10 @@ from pathlib import Path
 from ja_local_kb.errors import IdentityConflictError, SourceMissingError
 from ja_local_kb.models import SourceRegistry
 from ja_local_kb.registry import (
+    CLIENT_PROJECT_ID_PREFIX,
     derive_source_id,
     load_registry,
+    make_client_source_spec,
     make_source_spec,
     remove_source,
     resolve_source_path,
@@ -21,6 +24,12 @@ from ja_local_kb.registry import (
 
 
 class RegistryTests(unittest.TestCase):
+    def test_existing_project_source_id_is_unchanged(self) -> None:
+        self.assertEqual(
+            derive_source_id("project-a", "project_overview"),
+            "c486bcea6152034e4c0f064be1191fb9",
+        )
+
     def test_source_id_ignores_path(self) -> None:
         first = derive_source_id("project-a", "project_overview")
         second = derive_source_id("project-a", "project_overview")
@@ -104,6 +113,41 @@ class RegistryTests(unittest.TestCase):
                 source.source_id,
             )
             self.assertEqual(load_registry(path).sources, [])
+
+    def test_client_source_uses_internal_project_compatibility_fields(self) -> None:
+        source = make_client_source_spec(
+            client_id="example-a",
+            client_name="EXAMPLEA",
+            document_role="client_overview",
+            relative_path="clients/example-a/EXAMPLEA｜00_客户入口.md",
+        )
+        self.assertEqual(source.client_id, "example-a")
+        self.assertEqual(source.project_name, "EXAMPLEA")
+        self.assertEqual(
+            source.project_id,
+            f"{CLIENT_PROJECT_ID_PREFIX}example-a",
+        )
+
+    def test_legacy_registry_without_client_fields_still_loads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sources.json"
+            source = make_source_spec(
+                project_id="project-a",
+                project_name="Project A",
+                document_role="project_overview",
+                relative_path="project/overview.md",
+            )
+            payload = source.model_dump(mode="json")
+            payload.pop("client_id")
+            path.write_text(
+                '{"schema_version":1,"sources":['
+                + json.dumps(payload)
+                + "]}",
+                encoding="utf-8",
+            )
+            loaded = load_registry(path)
+            self.assertEqual(loaded.sources[0].client_id, "")
+            self.assertEqual(loaded.sources[0].source_id, source.source_id)
 
 
 if __name__ == "__main__":

@@ -72,6 +72,10 @@ class McpServerTests(unittest.TestCase):
                         search_tool.input_schema["properties"]["mode"]["default"],
                         "recall",
                     )
+                    self.assertIn(
+                        "client_ids",
+                        search_tool.input_schema["properties"],
+                    )
                     result = await client.call_tool(
                         "get_knowledge_status",
                         {},

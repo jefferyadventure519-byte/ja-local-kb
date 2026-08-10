@@ -13,6 +13,7 @@ import frontmatter
 
 from .errors import IdentityConflictError
 from .models import ChunkingConfig, ParsedChunk, SourceSpec
+from .registry import CLIENT_PROJECT_ID_PREFIX
 
 H2_RE = re.compile(r"(?m)^##\s+(.+?)\s*$")
 H3_RE = re.compile(r"(?m)^###\s+(.+?)\s*$")
@@ -146,6 +147,16 @@ def parse_source(
                 "frontmatter_project_id": frontmatter_project_id,
             },
         )
+    frontmatter_client_id = str(metadata.get("client_id", "")).strip()
+    if frontmatter_client_id and frontmatter_client_id != source.client_id:
+        raise IdentityConflictError(
+            "Frontmatter client_id conflicts with the registered identity",
+            details={
+                "source_id": source.source_id,
+                "registered_client_id": source.client_id,
+                "frontmatter_client_id": frontmatter_client_id,
+            },
+        )
 
     body = post.content.strip()
     document_hash = hashlib.sha256(raw_bytes).hexdigest()
@@ -175,11 +186,20 @@ def parse_source(
                     ]
                 )
             )
-            retrieval_text = "\n".join(
-                [
+            if source.project_id.startswith(CLIENT_PROJECT_ID_PREFIX):
+                identity_lines = [
+                    f"客户：{source.project_name}",
+                    f"客户ID：{source.client_id}",
+                ]
+            else:
+                identity_lines = [
                     f"项目：{source.project_name}",
                     f"项目ID：{source.project_id}",
                     f"客户ID：{source.client_id}",
+                ]
+            retrieval_text = "\n".join(
+                [
+                    *identity_lines,
                     f"文档角色：{source.document_role}",
                     f"文档类型：{metadata.get('doc_type', '')}",
                     f"章节：{heading}",

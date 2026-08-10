@@ -19,7 +19,11 @@ from ja_local_kb.multi_route import (
     _quotas,
     decompose_query,
 )
-from ja_local_kb.registry import make_source_spec, write_registry
+from ja_local_kb.registry import (
+    make_client_source_spec,
+    make_source_spec,
+    write_registry,
+)
 from ja_local_kb.reranker import RerankResult
 from ja_local_kb.retrieval import Retriever, plan_search
 from ja_local_kb.service import KnowledgeService
@@ -103,6 +107,111 @@ class RetrievalTests(unittest.TestCase):
             project_ids=["other-project"],
         )
         self.assertEqual(empty["evidence"], [])
+
+    def test_every_mode_applies_the_same_client_filter(self) -> None:
+        sources = [self.source]
+        for client_id, client_name in (
+            ("example-a", "EXAMPLEA"),
+            ("example-b", "EXAMPLEB"),
+        ):
+            relative_path = f"clients/{client_id}/{client_name}｜00_客户入口.md"
+            path = self.vault / relative_path
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "---\n"
+                "doc_type: client_overview\n"
+                f"client: {client_name}\n"
+                f"client_short_name: {client_name}\n"
+                f"client_id: {client_id}\n"
+                "status: active\n"
+                "---\n\n"
+                f"# {client_name}｜00_客户入口\n\n"
+                "## 共同客户证据\n\n共同客户证据。\n",
+                encoding="utf-8",
+            )
+            sources.append(
+                make_client_source_spec(
+                    client_id=client_id,
+                    client_name=client_name,
+                    document_role="client_overview",
+                    relative_path=relative_path,
+                )
+            )
+        write_registry(
+            self.settings.source_registry,
+            SourceRegistry(schema_version=1, sources=sources),
+        )
+        service = KnowledgeService(self.settings, self.embedder, FakeReranker())
+        service.sync_all()
+        for mode in ("keyword", "vector", "hybrid", "smart", "recall", "quality"):
+            with self.subTest(mode=mode):
+                result = service.search(
+                    "共同客户证据",
+                    mode=mode,
+                    top_k=8,
+                    client_ids=["example-a"],
+                )
+                self.assertEqual(result["client_ids"], ["example-a"])
+                self.assertEqual(
+                    result["filters"],
+                    {"project_ids": [], "client_ids": ["example-a"]},
+                )
+                self.assertTrue(result["evidence"])
+                self.assertTrue(
+                    all(
+                        item["client_id"] == "example-a"
+                        for item in result["evidence"]
+                    )
+                )
+
+    def test_project_and_client_filters_use_and_semantics(self) -> None:
+        linked_path = self.vault / "project" / "linked.md"
+        linked_path.write_text(
+            markdown("Linked client evidence.")
+            .replace("project_id: project-a", "project_id: project-linked")
+            .replace("project: Project A", "project: Project Linked"),
+            encoding="utf-8",
+        )
+        linked = make_source_spec(
+            project_id="project-linked",
+            project_name="Project Linked",
+            client_id="example-a",
+            document_role="project_overview",
+            relative_path="project/linked.md",
+        )
+        write_registry(
+            self.settings.source_registry,
+            SourceRegistry(schema_version=1, sources=[self.source, linked]),
+        )
+        service = KnowledgeService(self.settings, self.embedder)
+        service.sync_all()
+        matched = service.search(
+            "Linked client evidence",
+            mode="keyword",
+            project_ids=["project-linked"],
+            client_ids=["example-a"],
+        )
+        self.assertTrue(matched["evidence"])
+        self.assertTrue(
+            all(item["source_id"] == linked.source_id for item in matched["evidence"])
+        )
+        mismatched = service.search(
+            "Linked client evidence",
+            mode="keyword",
+            project_ids=["project-a"],
+            client_ids=["example-a"],
+        )
+        self.assertEqual(mismatched["evidence"], [])
+
+    def test_empty_client_filter_preserves_existing_results(self) -> None:
+        baseline = self.service.search("Alpha", mode="hybrid", top_k=3)
+        empty = self.service.search(
+            "Alpha",
+            mode="hybrid",
+            top_k=3,
+            client_ids=[],
+        )
+        self.assertEqual(baseline["evidence"], empty["evidence"])
 
     def test_get_source_never_accepts_a_path(self) -> None:
         result = self.service.search("Alpha", mode="keyword", top_k=1)

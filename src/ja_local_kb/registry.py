@@ -11,6 +11,8 @@ from pathlib import Path
 from .errors import ConfigurationError, IdentityConflictError, SourceMissingError
 from .models import SourceRegistry, SourceSpec
 
+CLIENT_PROJECT_ID_PREFIX = "__client__:"
+
 
 def derive_source_id(
     project_id: str,
@@ -37,6 +39,35 @@ def make_source_spec(
         project_id=project_id,
         project_name=project_name,
         client_id=client_id,
+        document_role=document_role,
+        relative_path=relative_path,
+        enabled=enabled,
+    )
+
+
+def make_client_source_spec(
+    *,
+    client_id: str,
+    client_name: str,
+    document_role: str,
+    relative_path: str,
+    enabled: bool = True,
+) -> SourceSpec:
+    """Build a client source without requiring a caller-owned project identity.
+
+    SourceRegistry v1 still requires the legacy project fields. They remain an
+    internal compatibility detail and are never written back to Markdown.
+    """
+    normalized_client_id = client_id.strip()
+    normalized_client_name = client_name.strip()
+    if not normalized_client_id:
+        raise ValueError("client_id must not be empty")
+    if not normalized_client_name:
+        raise ValueError("client_name must not be empty")
+    return make_source_spec(
+        project_id=f"{CLIENT_PROJECT_ID_PREFIX}{normalized_client_id}",
+        project_name=normalized_client_name,
+        client_id=normalized_client_id,
         document_role=document_role,
         relative_path=relative_path,
         enabled=enabled,

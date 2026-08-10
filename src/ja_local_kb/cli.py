@@ -26,6 +26,7 @@ from .quality_report import build_quality_report
 from .rebuild import rebuild_index
 from .registry import (
     load_registry,
+    make_client_source_spec,
     make_source_spec,
     set_source_enabled,
     update_source_path,
@@ -69,6 +70,7 @@ def parser() -> argparse.ArgumentParser:
     )
     search.add_argument("--top-k", type=int)
     search.add_argument("--project-id", action="append", dest="project_ids")
+    search.add_argument("--client-id", action="append", dest="client_ids")
     commands.add_parser("watch")
     rebuild = commands.add_parser("rebuild")
     rebuild.add_argument("--confirm", action="store_true")
@@ -104,6 +106,11 @@ def parser() -> argparse.ArgumentParser:
     add.add_argument("--document-role", required=True)
     add.add_argument("--relative-path", required=True)
     add.add_argument("--client-id", default="")
+    add_client = source_commands.add_parser("add-client")
+    add_client.add_argument("--client-id", required=True)
+    add_client.add_argument("--client-name", required=True)
+    add_client.add_argument("--document-role", required=True)
+    add_client.add_argument("--relative-path", required=True)
     remove = source_commands.add_parser("remove")
     remove.add_argument("--source-id", required=True)
     move = source_commands.add_parser("move")
@@ -141,6 +148,7 @@ def main(argv: list[str] | None = None) -> None:
                     mode=args.mode,
                     top_k=args.top_k,
                     project_ids=args.project_ids,
+                    client_ids=args.client_ids,
                 )
             )
         elif args.command == "watch":
@@ -351,6 +359,20 @@ def main(argv: list[str] | None = None) -> None:
                     document_role=args.document_role,
                     relative_path=args.relative_path,
                     client_id=args.client_id,
+                )
+                action = upsert_source(settings.source_registry, source)
+                print_json(
+                    {
+                        "action": action,
+                        "source": source.model_dump(mode="json"),
+                    }
+                )
+            elif args.source_command == "add-client":
+                source = make_client_source_spec(
+                    client_id=args.client_id,
+                    client_name=args.client_name,
+                    document_role=args.document_role,
+                    relative_path=args.relative_path,
                 )
                 action = upsert_source(settings.source_registry, source)
                 print_json(

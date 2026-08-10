@@ -17,6 +17,12 @@ The path is mutable metadata. A rename with unchanged content updates path
 metadata without re-embedding. Duplicate stable identities stop synchronization
 with `identity_conflict`.
 
+Client sources use the same registry and index. `source add-client` derives the
+legacy project fields under the reserved `__client__:` namespace, so callers do
+not provide a `project_id`. Those compatibility fields stay in the per-device
+registry/index and are never written back to customer Markdown. Existing
+project identities and `source_id` values are unchanged.
+
 ## Per-device boundary
 
 Each device owns its own:
@@ -44,6 +50,9 @@ The service never silently falls back to old evidence.
 Every search is filtered by the current enabled `source_id` set. Direct source
 or evidence lookup also rejects disabled and removed sources, even if old
 derived rows have not yet been compacted.
+
+Optional `project_ids` and `client_ids` are applied by the same LanceDB
+prefilter in every retrieval mode. When both are present, the clauses use AND.
 
 ## Embedding space
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added backward-compatible customer source enrollment and optional
+  `client_ids` filtering to the existing three-tool MCP surface without
+  changing Embedding, Reranker, chunking, or existing project source IDs.
+- Added repeatable CLI `--client-id`, `source add-client`, Obsidian customer
+  Frontmatter recognition, 00-06 admission, archive exclusion, and explicit
+  `客户｜客户简称` source grouping.
+
 ## 0.1.0 - 2026-08-04
 
 - Published the first reviewed public release without an open-source license;
