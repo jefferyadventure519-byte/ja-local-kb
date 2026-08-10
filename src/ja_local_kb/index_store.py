@@ -218,10 +218,12 @@ class LanceIndex:
             return []
         rows, matrix, row_norms = self._vector_snapshot()
         project_ids = self._where_values(where, "project_id")
+        client_ids = self._where_values(where, "client_id")
         source_ids = self._where_values(where, "source_id")
         eligible = np.asarray(
             [
                 (project_ids is None or row["project_id"] in project_ids)
+                and (client_ids is None or row["client_id"] in client_ids)
                 and (source_ids is None or row["source_id"] in source_ids)
                 for row in rows
             ],

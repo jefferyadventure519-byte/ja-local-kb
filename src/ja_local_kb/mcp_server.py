@@ -32,6 +32,7 @@ def build_server(settings_path: Path, secret_resolver: str = "keyring"):
         top_k: int | None = None,
         project_ids: list[str] | None = None,
         include_candidates: bool = False,
+        client_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return a complete high-recall evidence pool by default."""
         return facade.search_knowledge(
@@ -40,6 +41,7 @@ def build_server(settings_path: Path, secret_resolver: str = "keyring"):
             top_k,
             project_ids,
             include_candidates,
+            client_ids,
         )
 
     @server.tool(structured_output=True)

@@ -53,6 +53,7 @@ class SearchPlan:
 def build_filter(
     project_ids: Sequence[str] | None,
     source_ids: Sequence[str],
+    client_ids: Sequence[str] | None = None,
 ) -> str:
     source_values = ", ".join(sql_literal(value) for value in sorted(set(source_ids)))
     clauses = [f"source_id IN ({source_values})"]
@@ -61,7 +62,26 @@ def build_filter(
             sql_literal(value) for value in sorted(set(project_ids))
         )
         clauses.append(f"project_id IN ({project_values})")
+    if client_ids:
+        client_values = ", ".join(
+            sql_literal(value) for value in sorted(set(client_ids))
+        )
+        clauses.append(f"client_id IN ({client_values})")
     return " AND ".join(clauses)
+
+
+def filter_echo(
+    project_ids: Sequence[str] | None,
+    client_ids: Sequence[str] | None,
+) -> dict:
+    return {
+        "project_ids": list(project_ids or []),
+        "client_ids": list(client_ids or []),
+        "filters": {
+            "project_ids": sorted(set(project_ids or [])),
+            "client_ids": sorted(set(client_ids or [])),
+        },
+    }
 
 
 def plan_search(
@@ -144,6 +164,7 @@ class Retriever:
         mode: SearchMode = "recall",
         top_k: int | None = None,
         project_ids: Sequence[str] | None = None,
+        client_ids: Sequence[str] | None = None,
         source_ids: Sequence[str],
         include_candidates: bool = False,
     ) -> dict:
@@ -167,6 +188,7 @@ class Retriever:
                 normalized,
                 plan=plan,
                 project_ids=project_ids,
+                client_ids=client_ids,
                 source_ids=source_ids,
                 include_candidates=include_candidates,
             )
@@ -175,6 +197,7 @@ class Retriever:
                 normalized,
                 plan=plan,
                 project_ids=project_ids,
+                client_ids=client_ids,
                 source_ids=source_ids,
             )
         if mode == "smart" and plan.complex_query:
@@ -182,9 +205,10 @@ class Retriever:
                 normalized,
                 plan=plan,
                 project_ids=project_ids,
+                client_ids=client_ids,
                 source_ids=source_ids,
             )
-        where = build_filter(project_ids, source_ids)
+        where = build_filter(project_ids, source_ids, client_ids)
         keyword_rows: list[dict] = []
         vector_rows: list[dict] = []
         if plan.executed_mode in {"keyword", "hybrid"}:
@@ -225,7 +249,7 @@ class Retriever:
             "requested_mode": plan.requested_mode,
             "executed_mode": plan.executed_mode,
             "complex_query": plan.complex_query,
-            "project_ids": list(project_ids or []),
+            **filter_echo(project_ids, client_ids),
             "index_version": version,
             "freshness": "fresh",
             "evidence_count": len(evidence),
@@ -238,6 +262,7 @@ class Retriever:
         *,
         plan: SearchPlan,
         project_ids: Sequence[str] | None,
+        client_ids: Sequence[str] | None,
         source_ids: Sequence[str],
         include_candidates: bool,
     ) -> dict:
@@ -253,7 +278,7 @@ class Retriever:
             query=query,
             top_k=plan.top_k,
             candidate_k=plan.candidate_k,
-            where=build_filter(project_ids, source_ids),
+            where=build_filter(project_ids, source_ids, client_ids),
             expected_dimension=expected_dimension,
         )
         candidates = result.candidate_pool[: plan.candidate_k]
@@ -266,7 +291,7 @@ class Retriever:
                 "complex_query": plan.complex_query,
                 "subqueries": result.subqueries,
                 "vector_subqueries": result.vector_subqueries,
-                "project_ids": list(project_ids or []),
+                **filter_echo(project_ids, client_ids),
                 "routed_projects": result.routed_projects,
                 "project_scores": result.project_scores,
                 "candidate_count": 0,
@@ -318,7 +343,7 @@ class Retriever:
             "subqueries": result.subqueries,
             "vector_subqueries": result.vector_subqueries,
             "rerank_query": rerank_query,
-            "project_ids": list(project_ids or []),
+            **filter_echo(project_ids, client_ids),
             "routed_projects": result.routed_projects,
             "project_scores": result.project_scores,
             "candidate_count": len(candidates),
@@ -350,6 +375,7 @@ class Retriever:
         *,
         plan: SearchPlan,
         project_ids: Sequence[str] | None,
+        client_ids: Sequence[str] | None,
         source_ids: Sequence[str],
     ) -> dict:
         expected_dimension = self.state.vector_dimension()
@@ -362,7 +388,7 @@ class Retriever:
             query=query,
             top_k=plan.top_k,
             candidate_k=plan.candidate_k,
-            where=build_filter(project_ids, source_ids),
+            where=build_filter(project_ids, source_ids, client_ids),
             expected_dimension=expected_dimension,
         )
         version = self.state.index_version()
@@ -387,7 +413,7 @@ class Retriever:
             "complex_query": plan.complex_query,
             "subqueries": result.subqueries,
             "vector_subqueries": result.vector_subqueries,
-            "project_ids": list(project_ids or []),
+            **filter_echo(project_ids, client_ids),
             "routed_projects": result.routed_projects,
             "project_scores": result.project_scores,
             "candidate_count": len(candidates),
@@ -475,6 +501,7 @@ class Retriever:
         *,
         plan: SearchPlan,
         project_ids: Sequence[str] | None,
+        client_ids: Sequence[str] | None,
         source_ids: Sequence[str],
     ) -> dict:
         expected_dimension = self.state.vector_dimension()
@@ -487,7 +514,7 @@ class Retriever:
             query=query,
             top_k=plan.top_k,
             candidate_k=plan.candidate_k,
-            where=build_filter(project_ids, source_ids),
+            where=build_filter(project_ids, source_ids, client_ids),
             expected_dimension=expected_dimension,
         )
         version = self.state.index_version()
@@ -509,7 +536,7 @@ class Retriever:
             "complex_query": True,
             "subqueries": result.subqueries,
             "vector_subqueries": result.vector_subqueries,
-            "project_ids": list(project_ids or []),
+            **filter_echo(project_ids, client_ids),
             "routed_projects": result.routed_projects,
             "project_scores": result.project_scores,
             "index_version": version,

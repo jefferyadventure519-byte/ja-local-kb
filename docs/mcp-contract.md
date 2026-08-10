@@ -24,12 +24,18 @@ Inputs:
 - `mode` (default `recall`): `keyword`, `vector`, `hybrid`, `smart`, `recall`,
   or `quality`;
 - `top_k`;
-- optional `project_ids`.
+- optional `project_ids`;
+- optional `client_ids`;
 - optional `include_candidates` (default `false`): only valid with `quality`.
 
 Returns evidence only: source text, path, heading, project/client metadata,
 document role, source status, update time, scores, index version, and
 freshness.
+
+All six modes apply identical project/client filtering. `project_ids` and
+`client_ids` use AND when both are present; an absent or empty list adds no
+filter. The response echoes `project_ids`, `client_ids`, and the normalized
+`filters` that were actually applied.
 
 `quality` first keeps a broad cross-query candidate pool, then calls the
 configured independent Reranker and returns the highest-ranked diverse evidence

@@ -22,6 +22,17 @@ import {
 const VIEW_TYPE = "ja-local-knowledge-view";
 const GRAPH_GROUP_MARKER = 'path:"__JA_LOCAL_KB_MANAGED__"';
 const GRAPH_GROUP_RGB = 0x426fae;
+const CLIENT_PROJECT_ID_PREFIX = "__client__:";
+const CLIENT_CORE_DOC_TYPES = new Set([
+  "client_overview",
+  "client_facts",
+  "client_rule_library",
+  "client_decision_log",
+  "client_experience_library",
+  "client_change_log",
+  "client_source_index",
+]);
+const CLIENT_ARCHIVE_SEGMENTS = new Set(["client_archive", "80_archive"]);
 
 interface GraphColorGroup {
   query?: unknown;
@@ -137,11 +148,54 @@ interface SourceCommandResult {
 }
 
 interface SourceRegistrationInput {
+  sourceKind: "project" | "client";
   projectId: string;
   projectName: string;
+  clientName: string;
   documentRole: string;
   relativePath: string;
   clientId: string;
+}
+
+interface ClientFrontmatterIdentity {
+  clientId: string;
+  clientName: string;
+  documentRole: string;
+  eligible: boolean;
+  reason: string;
+}
+
+function clientFrontmatterIdentity(
+  app: App,
+  file: TFile,
+): ClientFrontmatterIdentity | null {
+  const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+  const clientId = String(frontmatter.client_id ?? "").trim();
+  const clientShortName = String(frontmatter.client_short_name ?? "").trim();
+  const clientName =
+    clientShortName || String(frontmatter.client ?? "").trim();
+  const documentRole = String(frontmatter.doc_type ?? "").trim();
+  if (!clientId || !clientName || !documentRole) {
+    return null;
+  }
+  const pathSegments = file.path
+    .split("/")
+    .map((segment) => segment.toLocaleLowerCase());
+  const archived = pathSegments.some((segment) =>
+    CLIENT_ARCHIVE_SEGMENTS.has(segment),
+  );
+  const coreDocument = CLIENT_CORE_DOC_TYPES.has(documentRole);
+  return {
+    clientId,
+    clientName,
+    documentRole,
+    eligible: coreDocument && !archived,
+    reason: archived
+      ? "客户归档默认不纳入知识库"
+      : coreDocument
+        ? ""
+        : "客户目录默认只允许 00—06 文档",
+  };
 }
 
 interface RegistrationSummary {
@@ -179,6 +233,7 @@ interface SearchEvidence {
   source_id: string;
   project_id: string;
   project_name: string;
+  client_id: string;
   document_role: string;
   relative_path: string;
   heading: string;
@@ -329,12 +384,28 @@ class CoreClient {
   }
 
   async addSource(input: {
+    sourceKind: "project" | "client";
     projectId: string;
     projectName: string;
+    clientName: string;
     documentRole: string;
     relativePath: string;
     clientId: string;
   }): Promise<SourceCommandResult> {
+    if (input.sourceKind === "client") {
+      return this.run<SourceCommandResult>([
+        "source",
+        "add-client",
+        "--client-id",
+        input.clientId,
+        "--client-name",
+        input.clientName,
+        "--document-role",
+        input.documentRole,
+        "--relative-path",
+        input.relativePath,
+      ]);
+    }
     return this.run<SourceCommandResult>([
       "source",
       "add",
@@ -824,11 +895,22 @@ class KnowledgeView extends ItemView {
     container: HTMLElement,
     status: KnowledgeStatus,
   ): void {
-    const grouped = new Map<string, SourceStatus[]>();
+    const grouped = new Map<
+      string,
+      { label: string; sources: SourceStatus[] }
+    >();
     for (const source of status.sources) {
-      const key = source.project_name || source.project_id;
-      const group = grouped.get(key) ?? [];
-      group.push(source);
+      const isClient =
+        Boolean(source.client_id) &&
+        source.project_id.startsWith(CLIENT_PROJECT_ID_PREFIX);
+      const key = isClient
+        ? `client:${source.client_id}`
+        : `project:${source.project_id || source.project_name}`;
+      const label = isClient
+        ? `客户｜${source.project_name || source.client_id}`
+        : source.project_name || source.project_id;
+      const group = grouped.get(key) ?? { label, sources: [] };
+      group.sources.push(source);
       grouped.set(key, group);
     }
     const section = container.createEl("details", { cls: "ja-kb-projects" });
@@ -845,9 +927,9 @@ class KnowledgeView extends ItemView {
     const sectionCopy = sectionSummary.createSpan({
       cls: "ja-kb-collapsible-copy",
     });
-    sectionCopy.createSpan({ text: "已纳入项目" });
+    sectionCopy.createSpan({ text: "已纳入来源" });
     sectionCopy.createEl("small", {
-      text: `${String(grouped.size)} 个项目 · ${String(status.sources.length)} 个文档`,
+      text: `${String(grouped.size)} 组来源 · ${String(status.sources.length)} 个文档`,
     });
     if (status.sources.length === 0) {
       section.createDiv({
@@ -857,18 +939,18 @@ class KnowledgeView extends ItemView {
       return;
     }
     const list = section.createDiv({ cls: "ja-kb-project-list" });
-    for (const [projectName, sources] of [...grouped.entries()].sort(
-      ([left], [right]) => left.localeCompare(right, "zh-CN"),
+    for (const [groupKey, group] of [...grouped.entries()].sort(
+      ([, left], [, right]) => left.label.localeCompare(right.label, "zh-CN"),
     )) {
+      const { label, sources } = group;
       const details = list.createEl("details", { cls: "ja-kb-project" });
-      const projectKey = sources[0]?.project_id || projectName;
-      details.dataset.projectKey = projectKey;
-      details.open = this.expandedProjects.has(projectKey);
+      details.dataset.projectKey = groupKey;
+      details.open = this.expandedProjects.has(groupKey);
       details.addEventListener("toggle", () => {
         if (details.open) {
-          this.expandedProjects.add(projectKey);
+          this.expandedProjects.add(groupKey);
         } else {
-          this.expandedProjects.delete(projectKey);
+          this.expandedProjects.delete(groupKey);
         }
         this.persistUiState();
       });
@@ -876,7 +958,7 @@ class KnowledgeView extends ItemView {
       const chevron = summary.createSpan({ cls: "ja-kb-project-chevron" });
       setIcon(chevron, "chevron-right");
       const copy = summary.createDiv({ cls: "ja-kb-project-copy" });
-      copy.createDiv({ cls: "ja-kb-project-name", text: projectName });
+      copy.createDiv({ cls: "ja-kb-project-name", text: label });
       const fresh = sources.filter(
         (source) => source.status === "fresh",
       ).length;
@@ -1283,10 +1365,14 @@ function prepareKnowledgeModal(
 }
 
 class TrackSourceModal extends Modal {
+  private sourceKind: "project" | "client" = "project";
   private projectId: string;
   private projectName: string;
+  private clientName = "";
   private documentRole: string;
   private clientId: string;
+  private clientEligible = true;
+  private clientReason = "";
   private submitting = false;
   private submitButton: HTMLButtonElement | null = null;
 
@@ -1298,17 +1384,31 @@ class TrackSourceModal extends Modal {
     super(app);
     const frontmatter =
       app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    this.projectId = String(frontmatter.project_id ?? "");
-    this.projectName = String(
-      frontmatter.project ?? file.parent?.name ?? file.basename,
-    );
-    this.documentRole = String(frontmatter.doc_type ?? file.basename);
-    this.clientId = String(frontmatter.client_id ?? "");
+    const clientIdentity = clientFrontmatterIdentity(app, file);
+    if (clientIdentity) {
+      this.sourceKind = "client";
+      this.projectId = "";
+      this.projectName = "";
+      this.clientId = clientIdentity.clientId;
+      this.clientName = clientIdentity.clientName;
+      this.documentRole = clientIdentity.documentRole;
+      this.clientEligible = clientIdentity.eligible;
+      this.clientReason = clientIdentity.reason;
+    } else {
+      this.projectId = String(frontmatter.project_id ?? "");
+      this.projectName = String(
+        frontmatter.project ?? file.parent?.name ?? file.basename,
+      );
+      this.documentRole = String(frontmatter.doc_type ?? file.basename);
+      this.clientId = String(frontmatter.client_id ?? "");
+    }
   }
 
   onOpen(): void {
     const content = prepareKnowledgeModal(this, "ja-kb-source-modal");
-    content.createEl("h2", { text: "纳入当前文档" });
+    content.createEl("h2", {
+      text: this.sourceKind === "client" ? "纳入客户文档" : "纳入当前文档",
+    });
     content.createEl("p", {
       text: this.file.path,
     });
@@ -1316,23 +1416,33 @@ class TrackSourceModal extends Modal {
       text: "提交后弹窗会关闭，切片与向量化将在后台完成。",
     });
     const grid = content.createDiv({ cls: "ja-kb-modal-grid" });
-    this.textSetting(grid, "Project ID", this.projectId, (value) => {
-      this.projectId = value;
-    });
-    this.textSetting(grid, "项目名称", this.projectName, (value) => {
-      this.projectName = value;
-    });
-    this.textSetting(grid, "文档角色", this.documentRole, (value) => {
-      this.documentRole = value;
-    });
-    this.textSetting(grid, "Client ID（可空）", this.clientId, (value) => {
-      this.clientId = value;
-    });
+    if (this.sourceKind === "client") {
+      new Setting(grid).setName("客户").setDesc(`客户｜${this.clientName}`);
+      new Setting(grid).setName("Client ID").setDesc(this.clientId);
+      new Setting(grid).setName("文档角色").setDesc(this.documentRole);
+      if (!this.clientEligible) {
+        grid.createDiv({ cls: "ja-kb-empty", text: this.clientReason });
+      }
+    } else {
+      this.textSetting(grid, "Project ID", this.projectId, (value) => {
+        this.projectId = value;
+      });
+      this.textSetting(grid, "项目名称", this.projectName, (value) => {
+        this.projectName = value;
+      });
+      this.textSetting(grid, "文档角色", this.documentRole, (value) => {
+        this.documentRole = value;
+      });
+      this.textSetting(grid, "Client ID（可空）", this.clientId, (value) => {
+        this.clientId = value;
+      });
+    }
     new Setting(grid).addButton((button) =>
       {
         button
           .setCta()
           .setButtonText("加入知识库")
+          .setDisabled(!this.clientEligible)
           .onClick(() => {
             void this.submit();
           });
@@ -1360,7 +1470,14 @@ class TrackSourceModal extends Modal {
     if (this.submitting) {
       return;
     }
-    if (!this.projectId || !this.projectName || !this.documentRole) {
+    if (this.sourceKind === "client" && !this.clientEligible) {
+      new Notice(this.clientReason);
+      return;
+    }
+    if (
+      this.sourceKind === "project" &&
+      (!this.projectId || !this.projectName || !this.documentRole)
+    ) {
       new Notice("Project ID、项目名称和文档角色不能为空");
       return;
     }
@@ -1372,8 +1489,10 @@ class TrackSourceModal extends Modal {
     try {
       const summary = await this.plugin.registerSourcesInBackground([
         {
+          sourceKind: this.sourceKind,
           projectId: this.projectId,
           projectName: this.projectName,
+          clientName: this.clientName,
           documentRole: this.documentRole,
           relativePath: this.file.path,
           clientId: this.clientId,
@@ -1401,13 +1520,16 @@ class TrackSourceModal extends Modal {
 
 interface CandidateSource {
   file: TFile;
+  sourceKind: "project" | "client";
   projectId: string;
   projectName: string;
+  clientName: string;
   documentRole: string;
   clientId: string;
   selected: boolean;
   valid: boolean;
   tracked: boolean;
+  reason: string;
 }
 
 class CandidateModal extends Modal {
@@ -1427,6 +1549,22 @@ class CandidateModal extends Modal {
       .map((file) => {
         const frontmatter =
           app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+        const clientIdentity = clientFrontmatterIdentity(app, file);
+        if (clientIdentity) {
+          return {
+            file,
+            sourceKind: "client" as const,
+            projectId: "",
+            projectName: "",
+            clientName: clientIdentity.clientName,
+            documentRole: clientIdentity.documentRole,
+            clientId: clientIdentity.clientId,
+            selected: false,
+            valid: clientIdentity.eligible,
+            tracked: trackedPaths.has(file.path),
+            reason: clientIdentity.reason,
+          };
+        }
         const projectId = String(frontmatter.project_id ?? "").trim();
         const projectName = String(
           frontmatter.project ?? file.parent?.name ?? file.basename,
@@ -1436,13 +1574,18 @@ class CandidateModal extends Modal {
         ).trim();
         return {
           file,
+          sourceKind: "project" as const,
           projectId,
           projectName,
+          clientName: "",
           documentRole,
           clientId: String(frontmatter.client_id ?? "").trim(),
           selected: false,
           valid: Boolean(projectId && projectName && documentRole),
           tracked: trackedPaths.has(file.path),
+          reason: projectId && projectName && documentRole
+            ? ""
+            : "缺少 project_id，无法安全纳入",
         };
       })
       .sort((left, right) =>
@@ -1474,8 +1617,10 @@ class CandidateModal extends Modal {
           candidate.tracked
             ? "已在知识库"
             : candidate.valid
-            ? `${candidate.projectId} / ${candidate.documentRole}`
-            : "缺少 project_id，无法安全纳入",
+            ? candidate.sourceKind === "client"
+              ? `客户｜${candidate.clientName} / ${candidate.documentRole}`
+              : `${candidate.projectId} / ${candidate.documentRole}`
+            : candidate.reason,
         )
         .addToggle((toggle) => {
           toggle.setValue(candidate.tracked);
@@ -1517,8 +1662,10 @@ class CandidateModal extends Modal {
     try {
       const summary = await this.plugin.registerSourcesInBackground(
         selected.map((candidate) => ({
+          sourceKind: candidate.sourceKind,
           projectId: candidate.projectId,
           projectName: candidate.projectName,
+          clientName: candidate.clientName,
           documentRole: candidate.documentRole,
           relativePath: candidate.file.path,
           clientId: candidate.clientId,

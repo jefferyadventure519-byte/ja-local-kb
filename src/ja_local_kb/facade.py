@@ -43,6 +43,7 @@ class ToolFacade:
         top_k: int | None = None,
         project_ids: list[str] | None = None,
         include_candidates: bool = False,
+        client_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         return self._call(
             lambda: self.manager.get().search(
@@ -50,6 +51,7 @@ class ToolFacade:
                 mode=mode,
                 top_k=top_k,
                 project_ids=project_ids,
+                client_ids=client_ids,
                 include_candidates=include_candidates,
             )
         )

@@ -256,6 +256,7 @@ class KnowledgeService:
         mode: SearchMode = "recall",
         top_k: int | None = None,
         project_ids: list[str] | None = None,
+        client_ids: list[str] | None = None,
         include_candidates: bool = False,
     ) -> dict:
         with self.lock.exclusive():
@@ -265,6 +266,7 @@ class KnowledgeService:
                 mode=mode,
                 top_k=top_k,
                 project_ids=project_ids,
+                client_ids=client_ids,
                 include_candidates=include_candidates,
                 source_ids=[
                     source.source_id
@@ -303,6 +305,7 @@ class KnowledgeService:
                     "source_id": row["source_id"],
                     "project_id": row["project_id"],
                     "project_name": row["project_name"],
+                    "client_id": row["client_id"],
                     "document_role": row["document_role"],
                     "relative_path": row["relative_path"],
                     "heading": row["heading"],
@@ -321,6 +324,7 @@ class KnowledgeService:
                 "source_id": source.source_id,
                 "project_id": source.project_id,
                 "project_name": source.project_name,
+                "client_id": source.client_id,
                 "document_role": source.document_role,
                 "relative_path": source.relative_path,
                 "content": content[:max_chars],
