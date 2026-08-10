@@ -1,6 +1,6 @@
 {
   "name": "ja-local-knowledge-obsidian",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Obsidian control surface for JA Local Knowledge.",
   "main": "main.js",
   "type": "module",

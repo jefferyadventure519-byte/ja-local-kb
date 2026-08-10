@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.1.2 - 2026-08-10
+
+### Fixed
+
+- Made long-lived MCP processes detect a newer committed SQLite index version,
+  reopen the LanceDB table, and clear process-local vector snapshots before
+  serving retrieval or source read-back.
+- Made `get_source(evidence_id)` fail closed when an evidence row does not
+  belong to the source's currently committed document hash.
+
+### Validation and compatibility
+
+- Added a two-service regression that warms a long-lived reader, updates and
+  restores the source through a separate writer, and proves `hybrid`, `vector`,
+  and `recall` switch evidence without restarting the reader.
+- Kept the three-tool MCP contract, SourceRegistry schema, source IDs,
+  Embedding, Reranker, chunking, project/client filters, and device-owned
+  settings and source registry unchanged. Existing fresh sources require no
+  re-embedding or migration.
+
 ## 0.1.1 - 2026-08-10
 
 ### Features

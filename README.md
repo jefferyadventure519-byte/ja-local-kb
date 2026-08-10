@@ -4,14 +4,20 @@
 
 ## 当前状态
 
+`0.1.2` 修复了长驻 MCP 在 watcher 完成外部索引更新后仍持有旧 LanceDB
+进程内视图的问题：查询会在现有跨进程锁内比较已提交索引版本，必要时重开
+LanceDB 并清空向量快照；旧版本证据不再能伪装成 fresh。该修复不改变
+Embedding、Reranker、Chunk、来源 ID、客户过滤或三个 MCP 工具，也不要求
+未变化来源重新向量化。
+
 `0.1.1` 在首个稳定版基础上增加客户知识原生登记与统一过滤，并将
 Apple Silicon 安装、插件、STDIO MCP 和重复安装纳入自动化分发门禁。
 支持范围必须分开理解：Windows 已验收；macOS 只支持 Apple Silicon
 （M 系列芯片），自动化门禁已通过但真实 Mac 端到端验收仍待完成；Intel Mac
 不受支持；Claude 真实客户端也尚未验收。Intel 边界来自 LanceDB 当前 macOS
 发行包只提供 arm64 轮子：<https://pypi.org/project/lancedb/#files>。
-其中 `0.1.1` 客户扩展已通过 Windows 隔离升级、回滚和全量回归，正式日常设备
-仍需在 Release 发布后分别完成原地更新验收。
+其中 `0.1.2` 必须在 Release 发布后完成 Windows 日常设备原地更新与长驻 MCP
+真实更新/撤销验收；Apple Silicon Mac 仍需在老板真实设备完成端到端验收。
 
 - 已实现显式来源注册、结构化 Chunk、差异 Embedding、SQLite 状态、
   LanceDB 全文/向量/混合检索和失效拒答。

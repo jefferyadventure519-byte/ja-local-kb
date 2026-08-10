@@ -8,6 +8,7 @@ from .embedding import Embedder
 from .errors import (
     FreshnessError,
     IdentityConflictError,
+    IndexIntegrityError,
     KnowledgeBaseError,
     NotIndexedError,
     SourceMissingError,
@@ -53,6 +54,7 @@ class KnowledgeService:
             self.state.bind_embedding_fingerprint(embedder.fingerprint)
         except ValueError as exc:
             raise IdentityConflictError(str(exc)) from exc
+        self._loaded_index_version = self.state.index_version()
 
     def sync_all(self) -> list[dict]:
         results = []
@@ -63,10 +65,12 @@ class KnowledgeService:
 
     def sync_source(self, source_id: str) -> dict:
         with self.lock.exclusive():
+            self._refresh_index_view_locked()
             return self._sync_source_locked(source_id)
 
     def remove_source(self, source_id: str) -> dict:
         with self.lock.exclusive():
+            self._refresh_index_view_locked()
             self._source(source_id)
             removed = remove_registered_source(
                 self.settings.source_registry,
@@ -75,6 +79,7 @@ class KnowledgeService:
             self.registry = load_registry(self.settings.source_registry)
             deleted_index_chunks = self.index.delete_source(source_id)
             deleted_state = self.state.delete_source(source_id)
+            self._loaded_index_version = deleted_state["index_version"]
             return {
                 "action": "removed",
                 "source": removed.model_dump(mode="json"),
@@ -119,6 +124,7 @@ class KnowledgeService:
                 chunks,
                 vector_dimension=dimension,
             )
+            self._loaded_index_version = version
             return {
                 "source_id": source_id,
                 "status": SourceStatus.FRESH.value,
@@ -261,6 +267,7 @@ class KnowledgeService:
     ) -> dict:
         with self.lock.exclusive():
             self.assert_ready()
+            self._refresh_index_view_locked()
             return self.retriever.search(
                 query,
                 mode=mode,
@@ -284,6 +291,7 @@ class KnowledgeService:
     ) -> dict:
         with self.lock.exclusive():
             self.assert_ready()
+            self._refresh_index_view_locked()
             if max_chars < 100 or max_chars > 100000:
                 raise ValueError("max_chars must be between 100 and 100000")
             if bool(source_id) == bool(evidence_id):
@@ -299,6 +307,20 @@ class KnowledgeService:
                 }
                 if row is None or row["source_id"] not in enabled_source_ids:
                     raise KeyError(f"Unknown evidence_id: {evidence_id}")
+                state_source = self.state.get_source(row["source_id"])
+                if (
+                    state_source is None
+                    or not state_source["committed_hash"]
+                    or row["document_hash"] != state_source["committed_hash"]
+                ):
+                    raise IndexIntegrityError(
+                        "Evidence does not belong to the committed source version",
+                        details={
+                            "evidence_id": evidence_id,
+                            "source_id": row["source_id"],
+                            "index_version": self.state.index_version(),
+                        },
+                    )
                 return {
                     "kind": "evidence",
                     "evidence_id": evidence_id,
@@ -338,6 +360,13 @@ class KnowledgeService:
             if source.source_id == source_id:
                 return source
         raise KeyError(f"Unknown source_id: {source_id}")
+
+    def _refresh_index_view_locked(self) -> None:
+        current_version = self.state.index_version()
+        if current_version == self._loaded_index_version:
+            return
+        self.index.refresh_from_disk()
+        self._loaded_index_version = current_version
 
     def _vectors_for(
         self,
