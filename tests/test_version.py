@@ -36,7 +36,7 @@ def test_stable_release_versions_are_consistent() -> None:
         )
     )
 
-    expected = "0.1.1"
+    expected = "0.1.2"
     assert metadata["project"]["version"] == expected
     assert ja_local_kb.__version__ == expected
     assert manifest["version"] == expected

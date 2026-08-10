@@ -3,7 +3,7 @@ param(
     [string]$InstallRoot = 'D:\JA-Local-KB',
     [Parameter(Mandatory = $true)]
     [string]$VaultRoot,
-    [string]$Version = '0.1.1',
+    [string]$Version = '0.1.2',
     [string]$EmbeddingModel = 'text-embedding-3-large',
     [ValidateSet('openai', 'openai_compatible')]
     [string]$EmbeddingProvider = 'openai',

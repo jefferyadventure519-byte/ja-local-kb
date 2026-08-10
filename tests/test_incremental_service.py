@@ -4,10 +4,12 @@ import hashlib
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ja_local_kb.errors import (
     EmbeddingUnavailableError,
     FreshnessError,
+    IndexIntegrityError,
     NotIndexedError,
 )
 from ja_local_kb.models import (
@@ -151,6 +153,133 @@ class IncrementalServiceTests(unittest.TestCase):
         self.assertEqual(second["embedded_count"], 1)
         self.assertEqual(second["reused_count"], first["chunk_count"] - 1)
         self.assertTrue(service.assert_ready()["ready"])
+
+    def test_long_lived_reader_refreshes_an_external_index_commit(self) -> None:
+        client_source = make_source_spec(
+            project_id="project-a",
+            project_name="Project A",
+            client_id="client-a",
+            document_role="project_overview",
+            relative_path="project/overview.md",
+        )
+        self.write_registry(client_source)
+        writer = KnowledgeService(self.settings, FakeEmbedder())
+        first = writer.sync_all()[0]
+        reader = KnowledgeService(self.settings, FakeEmbedder())
+
+        original = reader.search(
+            "Beta paragraph",
+            mode="hybrid",
+            top_k=8,
+            client_ids=["client-a"],
+        )
+        old_evidence = next(
+            evidence
+            for evidence in original["evidence"]
+            if "Beta paragraph." in evidence["source_text"]
+        )
+        old_evidence_id = old_evidence["evidence_id"]
+        # Warm the process-local vector snapshot before the external writer commits.
+        reader.search(
+            "Beta paragraph",
+            mode="vector",
+            top_k=8,
+            client_ids=["client-a"],
+        )
+
+        changed_text = "Changed beta paragraph with cross-process marker."
+        self.path.write_text(markdown(changed_text), encoding="utf-8")
+        changed = writer.sync_source(client_source.source_id)
+        self.assertGreater(changed["index_version"], first["index_version"])
+
+        refreshed = reader.search(
+            "cross-process marker",
+            mode="hybrid",
+            top_k=8,
+            client_ids=["client-a"],
+        )
+        self.assertEqual(refreshed["index_version"], changed["index_version"])
+        self.assertTrue(
+            any(
+                changed_text in evidence["source_text"]
+                and evidence["client_id"] == "client-a"
+                for evidence in refreshed["evidence"]
+            )
+        )
+        new_evidence_id = next(
+            evidence["evidence_id"]
+            for evidence in refreshed["evidence"]
+            if changed_text in evidence["source_text"]
+        )
+        vector_refreshed = reader.search(
+            "cross-process marker",
+            mode="vector",
+            top_k=8,
+            client_ids=["client-a"],
+        )
+        self.assertTrue(
+            any(
+                changed_text in evidence["source_text"]
+                for evidence in vector_refreshed["evidence"]
+            )
+        )
+        recall_refreshed = reader.search(
+            "cross-process marker",
+            mode="recall",
+            top_k=8,
+            client_ids=["client-a"],
+        )
+        self.assertTrue(
+            any(
+                changed_text in evidence["source_text"]
+                and evidence["client_id"] == "client-a"
+                for evidence in recall_refreshed["evidence"]
+            )
+        )
+        self.assertNotIn(
+            old_evidence_id,
+            [evidence["evidence_id"] for evidence in refreshed["evidence"]],
+        )
+        with self.assertRaises(KeyError):
+            reader.get_source(evidence_id=old_evidence_id)
+        source_readback = reader.get_source(source_id=client_source.source_id)
+        evidence_readback = reader.get_source(evidence_id=new_evidence_id)
+        self.assertIn(changed_text, source_readback["content"])
+        self.assertIn(changed_text, evidence_readback["source_text"])
+        self.assertEqual(
+            source_readback["index_version"],
+            evidence_readback["index_version"],
+        )
+
+        self.path.write_text(markdown(), encoding="utf-8")
+        restored = writer.sync_source(client_source.source_id)
+        restored_result = reader.search(
+            "Beta paragraph",
+            mode="hybrid",
+            top_k=8,
+            client_ids=["client-a"],
+        )
+        self.assertEqual(restored_result["index_version"], restored["index_version"])
+        self.assertIn(
+            old_evidence_id,
+            [evidence["evidence_id"] for evidence in restored_result["evidence"]],
+        )
+        with self.assertRaises(KeyError):
+            reader.get_source(evidence_id=new_evidence_id)
+
+    def test_get_source_rejects_evidence_from_an_uncommitted_document_hash(
+        self,
+    ) -> None:
+        service = KnowledgeService(self.settings, FakeEmbedder())
+        service.sync_all()
+        row = next(iter(service.index.rows_for_source(self.source.source_id).values()))
+        stale_row = {**row, "document_hash": "0" * 64}
+
+        with (
+            patch.object(service.index, "get_chunk", return_value=stale_row),
+            self.assertRaises(IndexIntegrityError),
+        ):
+            service.get_source(evidence_id=f"ev_{row['chunk_id']}")
 
     def test_path_rename_updates_metadata_without_embedding(self) -> None:
         embedder = FakeEmbedder()

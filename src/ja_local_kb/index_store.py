@@ -24,6 +24,7 @@ def sql_literal(value: str) -> str:
 
 class LanceIndex:
     def __init__(self, root: Path) -> None:
+        self.root = root
         root.mkdir(parents=True, exist_ok=True)
         self.db = lancedb.connect(root)
         self._table_handle = (
@@ -35,6 +36,16 @@ class LanceIndex:
         self._snapshot_rows: list[dict] | None = None
         self._snapshot_matrix: np.ndarray | None = None
         self._snapshot_norms: np.ndarray | None = None
+
+    def refresh_from_disk(self) -> None:
+        """Reopen the table after another process commits a new index version."""
+        self.db = lancedb.connect(self.root)
+        self._table_handle = (
+            self.db.open_table(TABLE_NAME)
+            if TABLE_NAME in self._table_names()
+            else None
+        )
+        self._invalidate_snapshot()
 
     def _table_names(self) -> list[str]:
         result = self.db.list_tables()
